@@ -14,6 +14,9 @@ pytz==2023.3
 requests==2.31.0
 python-dateutil==2.8.2
 
+# YAML configuration support
+PyYAML==6.0.2
+
 # Production deployment
 gunicorn==21.2.0
 
