@@ -2,6 +2,8 @@
 
 from typing import Dict, List, Tuple, Any
 
+from horary_config import cfg
+
 from models import Planet, Sign, HoraryChart
 
 
@@ -99,12 +101,41 @@ class TraditionalReceptionCalculator:
             dignities.append("exaltation")
 
         # 3. Triplicity (third strongest)
-        if self._has_triplicity_dignity(receiving_planet, received_position.sign, is_day):
+        if self._has_triplicity_dignity(
+            receiving_planet, received_position.sign, is_day
+        ):
             dignities.append("triplicity")
 
-        # TODO: Could add terms and faces for complete traditional reception
+        # Get position within sign for terms/faces
+        sign_degree = (
+            received_position.longitude - received_position.sign.start_degree
+        ) % 30
+
         # 4. Terms (Egyptian terms)
+        try:
+            terms_table = getattr(
+                cfg().reception.terms, received_position.sign.sign_name
+            )
+            for term in terms_table:
+                if term.start <= sign_degree < term.end:
+                    if Planet[term.ruler.upper()] == receiving_planet:
+                        dignities.append("term")
+                    break
+        except AttributeError:
+            pass
+
         # 5. Faces/Decans
+        try:
+            faces_table = getattr(
+                cfg().reception.faces, received_position.sign.sign_name
+            )
+            for face in faces_table:
+                if face.start <= sign_degree < face.end:
+                    if Planet[face.ruler.upper()] == receiving_planet:
+                        dignities.append("face")
+                    break
+        except AttributeError:
+            pass
 
         return dignities
 
@@ -138,6 +169,18 @@ class TraditionalReceptionCalculator:
 
         if "exaltation" in reception_1_to_2 and "exaltation" in reception_2_to_1:
             return "mutual_exaltation", {
+                "planet1_dignities": reception_1_to_2,
+                "planet2_dignities": reception_2_to_1,
+            }
+
+        if "term" in reception_1_to_2 and "term" in reception_2_to_1:
+            return "mutual_term", {
+                "planet1_dignities": reception_1_to_2,
+                "planet2_dignities": reception_2_to_1,
+            }
+
+        if "face" in reception_1_to_2 and "face" in reception_2_to_1:
+            return "mutual_face", {
                 "planet1_dignities": reception_1_to_2,
                 "planet2_dignities": reception_2_to_1,
             }
@@ -179,6 +222,10 @@ class TraditionalReceptionCalculator:
             return (
                 f"{planet1.value}↔{planet2.value} mixed reception ({p1_dignities} / {p2_dignities})"
             )
+        if reception_type == "mutual_term":
+            return f"{planet1.value}↔{planet2.value} mutual term reception"
+        if reception_type == "mutual_face":
+            return f"{planet1.value}↔{planet2.value} mutual face reception"
         if reception_type == "unilateral":
             receiving = details.get("receiving_planet")
             received = details.get("received_planet")
@@ -196,6 +243,10 @@ class TraditionalReceptionCalculator:
             return 8
         if reception_type == "mixed_reception":
             return 6
+        if reception_type == "mutual_term":
+            return 5
+        if reception_type == "mutual_face":
+            return 4
         if reception_type == "unilateral":
             dignities = details.get("dignities", [])
             if "domicile" in dignities:
@@ -204,7 +255,11 @@ class TraditionalReceptionCalculator:
                 return 4
             if "triplicity" in dignities:
                 return 3
-            return 2
+            if "term" in dignities:
+                return 2
+            if "face" in dignities:
+                return 1
+            return 1
         return 1
 
     def _calculate_house_position(self, longitude: float, houses: List[float]) -> int:
